@@ -22,6 +22,21 @@ def opts(extra=None):
     return o
 
 
+FALLBACK = [{},
+            {"extractor_args": {"youtube": {"player_client": ["tv", "web_safari"]}}},
+            {"extractor_args": {"youtube": {"player_client": ["android_vr"]}}}]
+
+
+def run(fn):
+    err = None
+    for fb in FALLBACK:
+        try:
+            return fn(fb)
+        except Exception as e:
+            err = e
+    raise err
+
+
 def resolve(url, q):
     if url:
         return url
@@ -83,8 +98,7 @@ def info():
     auth()
     url = resolve(request.args.get("url"), request.args.get("q"))
     try:
-        with yt_dlp.YoutubeDL(opts()) as y:
-            d = y.extract_info(url, download=False)
+        d = run(lambda x: yt_dlp.YoutubeDL(opts(x)).extract_info(url, download=False))
     except Exception as e:
         return jsonify(error=str(e)[:200]), 502
     fm = d.get("formats", [])
@@ -126,8 +140,7 @@ def download():
         return resp
 
     try:
-        with yt_dlp.YoutubeDL(o) as y:
-            y.download([url])
+        run(lambda x: yt_dlp.YoutubeDL({**o, **x}).download([url]))
     except Exception as e:
         shutil.rmtree(tmp, ignore_errors=True)
         return jsonify(error=str(e)[:200]), 502
